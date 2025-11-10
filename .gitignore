@@ -1,0 +1,9 @@
+build/
+.vs/
+.vscode/.cmaketools.json
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.log
+vcpkg_installed/

@@ -1,0 +1,11 @@
+{
+  "name": "codebackup-cpp",
+  "version": "3.0.0",
+  "description": "Intelligent file backup monitoring system with compression and version management",
+  "dependencies": [
+    "nlohmann-json",
+    "spdlog",
+    "efsw",
+    "zlib"
+  ]
+}

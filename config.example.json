@@ -1,0 +1,29 @@
+{
+  "backup_destination_base": "D:\\Backups",
+  
+  "strategy": {
+    "retention_days": 30,
+    "max_versions_per_file": 10,
+    "enable_compression": true,
+    "compression_level": 6,
+    "compression_threshold": 1024,
+    "enable_incremental": true,
+    "incremental_threshold": 1048576,
+    "full_backup_interval": 10,
+    "delta_ratio_threshold": 0.3,
+    "max_file_size": 104857600
+  },
+  
+  "backup_sources": [
+    {
+      "path": "D:\\Documents",
+      "enabled": true,
+      "presets": ["documents", "images", "common_blacklist"]
+    },
+    {
+      "path": "D:\\Projects",
+      "enabled": true,
+      "presets": ["code", "common_blacklist"]
+    }
+  ]
+}
