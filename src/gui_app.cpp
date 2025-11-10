@@ -950,14 +950,40 @@ void GuiApp::saveConfiguration() {
             source_json["path"] = source.path;
             source_json["enabled"] = source.enabled;
             source_json["presets"] = source.presets;
+            
+            // 保存自定义过滤器配置
+            if (source.custom_filter && source.custom_filter->mode != FilterConfig::Mode::None) {
+                nlohmann::json filter_json;
+                
+                // 保存模式
+                if (source.custom_filter->mode == FilterConfig::Mode::Whitelist) {
+                    filter_json["mode"] = "whitelist";
+                } else if (source.custom_filter->mode == FilterConfig::Mode::Blacklist) {
+                    filter_json["mode"] = "blacklist";
+                }
+                
+                // 保存扩展名列表
+                if (!source.custom_filter->extensions.empty()) {
+                    filter_json["extensions"] = source.custom_filter->extensions;
+                }
+                
+                source_json["filter"] = filter_json;
+            }
+            
             config_json["backup_sources"].push_back(source_json);
         }
         
-        // 保存策略配置 (如果存在的话)
+        // 保存策略配置
         config_json["strategy"]["retention_days"] = config_.strategy.retention_days;
         config_json["strategy"]["max_versions_per_file"] = config_.strategy.max_versions_per_file;
         config_json["strategy"]["enable_compression"] = config_.strategy.enable_compression;
+        config_json["strategy"]["compression_level"] = config_.strategy.compression_level;
+        config_json["strategy"]["compression_threshold"] = config_.strategy.compression_threshold;
         config_json["strategy"]["enable_incremental"] = config_.strategy.enable_incremental;
+        config_json["strategy"]["incremental_threshold"] = config_.strategy.incremental_threshold;
+        config_json["strategy"]["full_backup_interval"] = config_.strategy.full_backup_interval;
+        config_json["strategy"]["delta_ratio_threshold"] = config_.strategy.delta_ratio_threshold;
+        config_json["strategy"]["max_file_size"] = config_.strategy.max_file_size;
         
         // 写入文件
         std::ofstream file("config.json");
@@ -1238,8 +1264,8 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
         20, 370, 120, 30, hwndDlg, (HMENU)IDC_BTN_ADD_PRESET, GetModuleHandle(nullptr), nullptr);
 
     // 自定义过滤器
-    CreateWindowW(L"STATIC", L"自定义文件类型过滤:", WS_CHILD | WS_VISIBLE,
-        290, 130, 200, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
+    CreateWindowW(L"STATIC", L"自定义文件类型过滤 (会覆盖预设):", WS_CHILD | WS_VISIBLE,
+        290, 130, 300, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
 
     CreateWindowW(L"STATIC", L"模式:", WS_CHILD | WS_VISIBLE,
         290, 160, 60, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
@@ -1261,8 +1287,8 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
         SendMessageW(hComboMode, CB_SETCURSEL, 2, 0);
     }
 
-    CreateWindowW(L"STATIC", L"文件扩展名:", WS_CHILD | WS_VISIBLE,
-        290, 200, 120, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
+    CreateWindowW(L"STATIC", L"文件扩展名 (如: txt 或 .txt):", WS_CHILD | WS_VISIBLE,
+        290, 200, 250, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
 
     HWND hListExt = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", nullptr,
         WS_CHILD | WS_VISIBLE | WS_VSCROLL,
@@ -1286,6 +1312,17 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
 
     CreateWindowW(L"BUTTON", L"删除", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         670, 265, 60, 25, hwndDlg, (HMENU)IDC_BTN_REMOVE_EXT, GetModuleHandle(nullptr), nullptr);
+
+    // 添加说明文本
+    CreateWindowW(L"STATIC", 
+        L"💡 提示：\n"
+        L"• 预设：快速应用预定义的过滤规则\n"
+        L"• 自定义过滤器：精确控制要备份的文件类型\n"
+        L"• 白名单：只备份列表中的文件类型\n"
+        L"• 黑名单：排除列表中的文件类型，备份其他所有文件\n"
+        L"• 如果同时设置预设和自定义过滤器，自定义过滤器优先",
+        WS_CHILD | WS_VISIBLE | SS_LEFT,
+        20, 410, 760, 90, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
 
     // 确定/取消按钮
     CreateWindowW(L"BUTTON", L"确定", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,

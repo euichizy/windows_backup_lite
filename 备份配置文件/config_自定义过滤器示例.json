@@ -1,0 +1,171 @@
+{
+  "backup_destination_base": "D:\\Backups",
+  
+  "strategy": {
+    "retention_days": 30,
+    "max_versions_per_file": 10,
+    "enable_compression": true,
+    "compression_level": 6,
+    "compression_threshold": 1024,
+    "enable_incremental": true,
+    "incremental_threshold": 1048576,
+    "full_backup_interval": 10,
+    "delta_ratio_threshold": 0.3,
+    "max_file_size": 104857600
+  },
+  
+  "backup_sources": [
+    {
+      "_comment": "示例1：使用白名单，只备份文本和Markdown文件",
+      "path": "D:\\Notes",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "whitelist",
+        "extensions": [".txt", ".md", ".markdown"]
+      }
+    },
+    {
+      "_comment": "示例2：使用黑名单，排除视频和大文件",
+      "path": "D:\\Documents",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "blacklist",
+        "extensions": [".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".iso", ".dmg"]
+      }
+    },
+    {
+      "_comment": "示例3：使用预设（推荐方式）",
+      "path": "D:\\Projects\\WebApp",
+      "enabled": true,
+      "presets": ["code", "common_blacklist"]
+    },
+    {
+      "_comment": "示例4：白名单 - 只备份前端代码",
+      "path": "D:\\Projects\\Frontend",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "whitelist",
+        "extensions": [
+          ".js", ".ts", ".jsx", ".tsx",
+          ".vue", ".html", ".css", ".scss", ".sass", ".less",
+          ".json", ".yaml", ".yml"
+        ]
+      }
+    },
+    {
+      "_comment": "示例5：白名单 - 只备份Python项目",
+      "path": "D:\\Projects\\PythonApp",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "whitelist",
+        "extensions": [
+          ".py", ".pyx", ".pyi",
+          ".txt", ".md", ".rst",
+          ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg"
+        ]
+      }
+    },
+    {
+      "_comment": "示例6：白名单 - 只备份C++项目",
+      "path": "D:\\Projects\\CppApp",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "whitelist",
+        "extensions": [
+          ".cpp", ".cc", ".cxx", ".c",
+          ".h", ".hpp", ".hxx", ".hh",
+          ".cmake", ".txt", ".md"
+        ]
+      }
+    },
+    {
+      "_comment": "示例7：黑名单 - 排除临时文件和日志",
+      "path": "D:\\WorkFiles",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "blacklist",
+        "extensions": [
+          ".tmp", ".temp", ".bak", ".backup",
+          ".log", ".cache", ".swp", ".swo",
+          "~"
+        ]
+      }
+    },
+    {
+      "_comment": "示例8：白名单 - 只备份Office文档",
+      "path": "D:\\OfficeDocs",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "whitelist",
+        "extensions": [
+          ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt",
+          ".pdf", ".txt"
+        ]
+      }
+    },
+    {
+      "_comment": "示例9：白名单 - 只备份图片",
+      "path": "D:\\Photos",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "whitelist",
+        "extensions": [
+          ".jpg", ".jpeg", ".png", ".gif", ".bmp",
+          ".svg", ".webp", ".ico",
+          ".psd", ".ai", ".raw", ".cr2", ".nef"
+        ]
+      }
+    },
+    {
+      "_comment": "示例10：黑名单 - 排除编译产物",
+      "path": "D:\\Projects\\BuildDir",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "blacklist",
+        "extensions": [
+          ".exe", ".dll", ".so", ".dylib",
+          ".o", ".obj", ".a", ".lib",
+          ".pdb", ".ilk", ".exp",
+          ".pyc", ".pyo", ".class"
+        ]
+      }
+    },
+    {
+      "_comment": "示例11：无过滤 - 备份所有文件",
+      "path": "D:\\ImportantFiles",
+      "enabled": true,
+      "presets": [],
+      "filter": {
+        "mode": "none",
+        "extensions": []
+      }
+    },
+    {
+      "_comment": "示例12：监控单个文件",
+      "path": "D:\\Database\\important.db",
+      "enabled": true,
+      "presets": []
+    },
+    {
+      "_comment": "示例13：组合预设（推荐）",
+      "path": "D:\\Projects\\FullStack",
+      "enabled": true,
+      "presets": ["code", "documents", "common_blacklist"]
+    },
+    {
+      "_comment": "示例14：临时禁用的备份源",
+      "path": "D:\\TempProject",
+      "enabled": false,
+      "presets": ["code"]
+    }
+  ]
+}
