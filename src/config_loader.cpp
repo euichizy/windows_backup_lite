@@ -79,16 +79,28 @@ std::optional<Config> ConfigLoader::loadConfig(const std::string& config_file) {
                 if (source_json.contains("filter")) {
                     FilterConfig filter;
                     auto filter_json = source_json["filter"];
-                    std::string mode_str = filter_json.value("mode", "none");
                     
-                    if (mode_str == "whitelist") {
-                        filter.mode = FilterConfig::Mode::Whitelist;
-                    } else if (mode_str == "blacklist") {
-                        filter.mode = FilterConfig::Mode::Blacklist;
+                    // 支持新的双列表模式
+                    if (filter_json.contains("whitelist")) {
+                        filter.whitelist_extensions = filter_json["whitelist"].get<std::vector<std::string>>();
+                    }
+                    if (filter_json.contains("blacklist")) {
+                        filter.blacklist_extensions = filter_json["blacklist"].get<std::vector<std::string>>();
                     }
                     
-                    if (filter_json.contains("extensions")) {
-                        filter.extensions = filter_json["extensions"].get<std::vector<std::string>>();
+                    // 兼容旧的单模式配置
+                    if (!filter.useDualMode()) {
+                        std::string mode_str = filter_json.value("mode", "none");
+                        
+                        if (mode_str == "whitelist") {
+                            filter.mode = FilterConfig::Mode::Whitelist;
+                        } else if (mode_str == "blacklist") {
+                            filter.mode = FilterConfig::Mode::Blacklist;
+                        }
+                        
+                        if (filter_json.contains("extensions")) {
+                            filter.extensions = filter_json["extensions"].get<std::vector<std::string>>();
+                        }
                     }
                     
                     source.custom_filter = filter;
@@ -148,5 +160,80 @@ FilterConfig ConfigLoader::mergePresets(
         result.extensions = blacklisted_exts;
     }
 
+    return result;
+}
+
+FilterConfig ConfigLoader::mergeFilters(
+    const std::vector<std::string>& preset_names,
+    const nlohmann::json& presets,
+    const std::optional<FilterConfig>& custom_filter) {
+    
+    FilterConfig result;
+    std::vector<std::string> preset_whitelist;
+    std::vector<std::string> preset_blacklist;
+    
+    // 1. 从预设中收集白名单和黑名单
+    for (const auto& name : preset_names) {
+        if (!presets.contains(name)) {
+            continue;
+        }
+
+        auto preset = presets[name];
+        std::string mode_str = preset.value("mode", "none");
+        auto exts = preset.value("extensions", std::vector<std::string>());
+
+        if (mode_str == "whitelist") {
+            preset_whitelist.insert(preset_whitelist.end(), exts.begin(), exts.end());
+        } else if (mode_str == "blacklist") {
+            preset_blacklist.insert(preset_blacklist.end(), exts.begin(), exts.end());
+        }
+    }
+    
+    // 2. 如果有自定义过滤器，合并规则
+    if (custom_filter) {
+        if (custom_filter->useDualMode()) {
+            // 使用新的双列表模式
+            result.whitelist_extensions = custom_filter->whitelist_extensions;
+            result.blacklist_extensions = custom_filter->blacklist_extensions;
+            
+            // 将预设的白名单添加到结果中（如果自定义白名单为空）
+            if (result.whitelist_extensions.empty() && !preset_whitelist.empty()) {
+                result.whitelist_extensions = preset_whitelist;
+            }
+            
+            // 合并黑名单（预设 + 自定义）
+            for (const auto& ext : preset_blacklist) {
+                if (std::find(result.blacklist_extensions.begin(), 
+                             result.blacklist_extensions.end(), ext) == result.blacklist_extensions.end()) {
+                    result.blacklist_extensions.push_back(ext);
+                }
+            }
+        } else {
+            // 兼容旧的单模式
+            if (custom_filter->mode != FilterConfig::Mode::None && !custom_filter->extensions.empty()) {
+                // 自定义过滤器优先
+                result.mode = custom_filter->mode;
+                result.extensions = custom_filter->extensions;
+            } else {
+                // 使用预设
+                if (!preset_whitelist.empty()) {
+                    result.mode = FilterConfig::Mode::Whitelist;
+                    result.extensions = preset_whitelist;
+                } else if (!preset_blacklist.empty()) {
+                    result.mode = FilterConfig::Mode::Blacklist;
+                    result.extensions = preset_blacklist;
+                }
+            }
+        }
+    } else {
+        // 没有自定义过滤器，只使用预设
+        if (!preset_whitelist.empty()) {
+            result.whitelist_extensions = preset_whitelist;
+        }
+        if (!preset_blacklist.empty()) {
+            result.blacklist_extensions = preset_blacklist;
+        }
+    }
+    
     return result;
 }

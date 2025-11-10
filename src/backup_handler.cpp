@@ -96,13 +96,48 @@ void BackupHandler::handleFileAction(efsw::WatchID watchid, const std::string& d
 }
 
 bool BackupHandler::isAllowed(const std::string& file_path) const {
-    if (filter_config_.mode == FilterConfig::Mode::None) {
-        return true;
-    }
-
     fs::path path(file_path);
     std::string ext = path.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    
+    // 优先使用双列表模式
+    if (filter_config_.useDualMode()) {
+        bool in_whitelist = false;
+        bool in_blacklist = false;
+        
+        // 检查白名单
+        if (!filter_config_.whitelist_extensions.empty()) {
+            in_whitelist = std::find(filter_config_.whitelist_extensions.begin(), 
+                                     filter_config_.whitelist_extensions.end(), 
+                                     ext) != filter_config_.whitelist_extensions.end();
+        }
+        
+        // 检查黑名单
+        if (!filter_config_.blacklist_extensions.empty()) {
+            in_blacklist = std::find(filter_config_.blacklist_extensions.begin(), 
+                                     filter_config_.blacklist_extensions.end(), 
+                                     ext) != filter_config_.blacklist_extensions.end();
+        }
+        
+        // 规则：
+        // 1. 如果在黑名单中，直接拒绝
+        // 2. 如果有白名单且不在白名单中，拒绝
+        // 3. 如果没有白名单，或在白名单中，允许
+        if (in_blacklist) {
+            return false;
+        }
+        
+        if (!filter_config_.whitelist_extensions.empty()) {
+            return in_whitelist;
+        }
+        
+        return true;
+    }
+    
+    // 兼容旧的单模式
+    if (filter_config_.mode == FilterConfig::Mode::None) {
+        return true;
+    }
 
     auto& exts = filter_config_.extensions;
     bool found = std::find(exts.begin(), exts.end(), ext) != exts.end();

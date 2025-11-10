@@ -18,6 +18,15 @@ struct FilterConfig {
     enum class Mode { None, Whitelist, Blacklist };
     Mode mode = Mode::None;
     std::vector<std::string> extensions;
+    
+    // 新增：支持同时设置白名单和黑名单
+    std::vector<std::string> whitelist_extensions;  // 白名单扩展名
+    std::vector<std::string> blacklist_extensions;  // 黑名单扩展名
+    
+    // 判断是否使用新的双列表模式
+    bool useDualMode() const {
+        return !whitelist_extensions.empty() || !blacklist_extensions.empty();
+    }
 };
 
 // 备份任务结构

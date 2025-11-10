@@ -26,7 +26,12 @@ public:
     static std::optional<nlohmann::json> loadPresets(const std::string& presets_file);
     static FilterConfig mergePresets(const std::vector<std::string>& preset_names,
                                      const nlohmann::json& presets);
-    static BackupStrategy loadStrategy(const nlohmann::json& json);  // 新增
+    static BackupStrategy loadStrategy(const nlohmann::json& json);
+    
+    // 新增：合并预设和自定义过滤器
+    static FilterConfig mergeFilters(const std::vector<std::string>& preset_names,
+                                     const nlohmann::json& presets,
+                                     const std::optional<FilterConfig>& custom_filter);
 
 private:
     static std::optional<nlohmann::json> loadJsonFile(const std::string& file_path,

@@ -70,6 +70,10 @@ struct SourceConfigData {
     HWND hComboMode;
     HFONT hFont;
     bool isNewSource;
+    // 新增：双列表模式控件
+    HWND hListWhitelist;
+    HWND hListBlacklist;
+    HWND hCheckUseDualMode;
 };
 
 // 格式窗口过程
@@ -160,6 +164,8 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                         if (!exists) {
                             data->source->presets.push_back(presetName);
                             MessageBoxW(hwnd, (L"已添加预设: " + presetStr).c_str(), L"成功", MB_ICONINFORMATION);
+                        } else {
+                            MessageBoxW(hwnd, L"该预设已存在", L"提示", MB_ICONINFORMATION);
                         }
                     }
                     return 0;
@@ -187,6 +193,59 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     return 0;
                 }
 
+                // 双列表模式按钮处理
+                case IDC_BTN_ADD_WHITELIST: {
+                    if (data->hListWhitelist) {
+                        wchar_t ext[256];
+                        GetWindowTextW(GetDlgItem(hwnd, IDC_EDIT_WHITELIST_EXT), ext, 256);
+                        
+                        if (wcslen(ext) > 0) {
+                            std::wstring extStr(ext);
+                            if (extStr[0] != L'.') extStr = L"." + extStr;
+                            
+                            SendMessageW(data->hListWhitelist, LB_ADDSTRING, 0, (LPARAM)extStr.c_str());
+                            SetWindowTextW(GetDlgItem(hwnd, IDC_EDIT_WHITELIST_EXT), L"");
+                        }
+                    }
+                    return 0;
+                }
+
+                case IDC_BTN_ADD_BLACKLIST: {
+                    if (data->hListBlacklist) {
+                        wchar_t ext[256];
+                        GetWindowTextW(GetDlgItem(hwnd, IDC_EDIT_BLACKLIST_EXT), ext, 256);
+                        
+                        if (wcslen(ext) > 0) {
+                            std::wstring extStr(ext);
+                            if (extStr[0] != L'.') extStr = L"." + extStr;
+                            
+                            SendMessageW(data->hListBlacklist, LB_ADDSTRING, 0, (LPARAM)extStr.c_str());
+                            SetWindowTextW(GetDlgItem(hwnd, IDC_EDIT_BLACKLIST_EXT), L"");
+                        }
+                    }
+                    return 0;
+                }
+
+                case IDC_BTN_REMOVE_WHITELIST: {
+                    if (data->hListWhitelist) {
+                        int sel = (int)SendMessageW(data->hListWhitelist, LB_GETCURSEL, 0, 0);
+                        if (sel != LB_ERR) {
+                            SendMessageW(data->hListWhitelist, LB_DELETESTRING, sel, 0);
+                        }
+                    }
+                    return 0;
+                }
+
+                case IDC_BTN_REMOVE_BLACKLIST: {
+                    if (data->hListBlacklist) {
+                        int sel = (int)SendMessageW(data->hListBlacklist, LB_GETCURSEL, 0, 0);
+                        if (sel != LB_ERR) {
+                            SendMessageW(data->hListBlacklist, LB_DELETESTRING, sel, 0);
+                        }
+                    }
+                    return 0;
+                }
+
                 case IDC_BTN_SOURCE_OK: {
                     wchar_t path[MAX_PATH];
                     GetWindowTextW(GetDlgItem(hwnd, IDC_EDIT_SOURCE_PATH), path, MAX_PATH);
@@ -200,22 +259,63 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     data->source->path = WideToUtf8(pathWstr);
                     data->source->enabled = (SendMessageW(GetDlgItem(hwnd, IDC_CHECK_ENABLED), BM_GETCHECK, 0, 0) == BST_CHECKED);
                     
-                    // 获取模式
-                    int modeIdx = (int)SendMessageW(data->hComboMode, CB_GETCURSEL, 0, 0);
-                    if (modeIdx != CB_ERR && data->source->custom_filter) {
-                        if (modeIdx == 0) data->source->custom_filter->mode = FilterConfig::Mode::Whitelist;
-                        else if (modeIdx == 1) data->source->custom_filter->mode = FilterConfig::Mode::Blacklist;
-                        else data->source->custom_filter->mode = FilterConfig::Mode::None;
+                    // 确保 custom_filter 存在
+                    if (!data->source->custom_filter) {
+                        data->source->custom_filter = std::make_optional<FilterConfig>();
+                    }
+                    
+                    // 检查是否使用双列表模式
+                    bool useDualMode = (data->hCheckUseDualMode && 
+                                       SendMessageW(data->hCheckUseDualMode, BM_GETCHECK, 0, 0) == BST_CHECKED);
+                    
+                    if (useDualMode && data->hListWhitelist && data->hListBlacklist) {
+                        // 使用新的双列表模式
+                        data->source->custom_filter->whitelist_extensions.clear();
+                        data->source->custom_filter->blacklist_extensions.clear();
                         
-                        // 获取扩展名列表
-                        data->source->custom_filter->extensions.clear();
-                        int count = (int)SendMessageW(data->hListExtensions, LB_GETCOUNT, 0, 0);
-                        for (int i = 0; i < count; i++) {
+                        // 获取白名单
+                        int whiteCount = (int)SendMessageW(data->hListWhitelist, LB_GETCOUNT, 0, 0);
+                        for (int i = 0; i < whiteCount; i++) {
                             wchar_t ext[256];
-                            SendMessageW(data->hListExtensions, LB_GETTEXT, i, (LPARAM)ext);
+                            SendMessageW(data->hListWhitelist, LB_GETTEXT, i, (LPARAM)ext);
                             std::wstring extWstr(ext);
-                            data->source->custom_filter->extensions.push_back(WideToUtf8(extWstr));
+                            data->source->custom_filter->whitelist_extensions.push_back(WideToUtf8(extWstr));
                         }
+                        
+                        // 获取黑名单
+                        int blackCount = (int)SendMessageW(data->hListBlacklist, LB_GETCOUNT, 0, 0);
+                        for (int i = 0; i < blackCount; i++) {
+                            wchar_t ext[256];
+                            SendMessageW(data->hListBlacklist, LB_GETTEXT, i, (LPARAM)ext);
+                            std::wstring extWstr(ext);
+                            data->source->custom_filter->blacklist_extensions.push_back(WideToUtf8(extWstr));
+                        }
+                        
+                        // 清空旧的单模式数据
+                        data->source->custom_filter->mode = FilterConfig::Mode::None;
+                        data->source->custom_filter->extensions.clear();
+                    } else {
+                        // 使用旧的单模式
+                        int modeIdx = (int)SendMessageW(data->hComboMode, CB_GETCURSEL, 0, 0);
+                        if (modeIdx != CB_ERR) {
+                            if (modeIdx == 0) data->source->custom_filter->mode = FilterConfig::Mode::Whitelist;
+                            else if (modeIdx == 1) data->source->custom_filter->mode = FilterConfig::Mode::Blacklist;
+                            else data->source->custom_filter->mode = FilterConfig::Mode::None;
+                            
+                            // 获取扩展名列表
+                            data->source->custom_filter->extensions.clear();
+                            int count = (int)SendMessageW(data->hListExtensions, LB_GETCOUNT, 0, 0);
+                            for (int i = 0; i < count; i++) {
+                                wchar_t ext[256];
+                                SendMessageW(data->hListExtensions, LB_GETTEXT, i, (LPARAM)ext);
+                                std::wstring extWstr(ext);
+                                data->source->custom_filter->extensions.push_back(WideToUtf8(extWstr));
+                            }
+                        }
+                        
+                        // 清空双列表数据
+                        data->source->custom_filter->whitelist_extensions.clear();
+                        data->source->custom_filter->blacklist_extensions.clear();
                     }
                     
                     PostMessageW(hwnd, WM_CLOSE, 0, 0);
@@ -268,7 +368,7 @@ LRESULT CALLBACK SettingsDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
                 case IDC_BTN_ADD_SOURCE: {
                     BackupSource new_source;
                     new_source.enabled = true;
-                    new_source.presets = {"default"};
+                    new_source.presets = {};  // 空预设，让用户自己选择
                     
                     if (data->app->showSourceConfigDialog(new_source, true)) {
                         // 检查是否已存在
@@ -952,22 +1052,37 @@ void GuiApp::saveConfiguration() {
             source_json["presets"] = source.presets;
             
             // 保存自定义过滤器配置
-            if (source.custom_filter && source.custom_filter->mode != FilterConfig::Mode::None) {
+            if (source.custom_filter) {
                 nlohmann::json filter_json;
+                bool hasFilter = false;
                 
-                // 保存模式
-                if (source.custom_filter->mode == FilterConfig::Mode::Whitelist) {
-                    filter_json["mode"] = "whitelist";
-                } else if (source.custom_filter->mode == FilterConfig::Mode::Blacklist) {
-                    filter_json["mode"] = "blacklist";
+                // 优先保存双列表模式
+                if (source.custom_filter->useDualMode()) {
+                    if (!source.custom_filter->whitelist_extensions.empty()) {
+                        filter_json["whitelist"] = source.custom_filter->whitelist_extensions;
+                        hasFilter = true;
+                    }
+                    if (!source.custom_filter->blacklist_extensions.empty()) {
+                        filter_json["blacklist"] = source.custom_filter->blacklist_extensions;
+                        hasFilter = true;
+                    }
+                } else if (source.custom_filter->mode != FilterConfig::Mode::None) {
+                    // 兼容旧的单模式
+                    if (source.custom_filter->mode == FilterConfig::Mode::Whitelist) {
+                        filter_json["mode"] = "whitelist";
+                    } else if (source.custom_filter->mode == FilterConfig::Mode::Blacklist) {
+                        filter_json["mode"] = "blacklist";
+                    }
+                    
+                    if (!source.custom_filter->extensions.empty()) {
+                        filter_json["extensions"] = source.custom_filter->extensions;
+                        hasFilter = true;
+                    }
                 }
                 
-                // 保存扩展名列表
-                if (!source.custom_filter->extensions.empty()) {
-                    filter_json["extensions"] = source.custom_filter->extensions;
+                if (hasFilter) {
+                    source_json["filter"] = filter_json;
                 }
-                
-                source_json["filter"] = filter_json;
             }
             
             config_json["backup_sources"].push_back(source_json);
@@ -1061,12 +1176,12 @@ void GuiApp::monitoringThread() {
                 continue;
             }
 
-            FilterConfig filter_config;
-            if (source.custom_filter) {
-                filter_config = *source.custom_filter;
-            } else if (!source.presets.empty()) {
-                filter_config = ConfigLoader::mergePresets(source.presets, presets_);
-            }
+            // 使用新的合并函数，支持预设和自定义过滤器同时使用
+            FilterConfig filter_config = ConfigLoader::mergeFilters(
+                source.presets, 
+                presets_, 
+                source.custom_filter
+            );
 
             auto handler = std::make_unique<BackupHandler>(
                 source.path, 
