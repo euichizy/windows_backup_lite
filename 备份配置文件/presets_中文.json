@@ -1,0 +1,104 @@
+{
+  "代码文件": {
+    "mode": "whitelist",
+    "extensions": [
+      ".py", ".pyw", ".ipynb",
+      ".c", ".cpp", ".h", ".hpp",
+      ".cs", ".java", ".go", ".rs",
+      ".js", ".ts", ".jsx", ".tsx",
+      ".vue", ".php", ".html", ".css",
+      ".json", ".xml", ".yaml", ".yml",
+      ".md", ".sh", ".bat", ".sql"
+    ]
+  },
+  "文档": {
+    "mode": "whitelist",
+    "extensions": [
+      ".doc", ".docx", ".pdf", ".txt",
+      ".xls", ".xlsx", ".csv",
+      ".ppt", ".pptx",
+      ".md", ".rtf"
+    ]
+  },
+  "图片": {
+    "mode": "whitelist",
+    "extensions": [
+      ".jpg", ".jpeg", ".png", ".gif",
+      ".bmp", ".svg", ".webp",
+      ".psd", ".ai"
+    ]
+  },
+  "音频": {
+    "mode": "whitelist",
+    "extensions": [
+      ".mp3", ".wav", ".flac",
+      ".aac", ".m4a", ".ogg"
+    ]
+  },
+  "视频": {
+    "mode": "whitelist",
+    "extensions": [
+      ".mp4", ".mov", ".avi",
+      ".mkv", ".flv", ".webm"
+    ]
+  },
+  "压缩包": {
+    "mode": "whitelist",
+    "extensions": [
+      ".zip", ".rar", ".7z",
+      ".tar", ".gz"
+    ]
+  },
+  "电子书": {
+    "mode": "whitelist",
+    "extensions": [
+      ".epub", ".mobi", ".azw",
+      ".azw3", ".pdf"
+    ]
+  },
+  "C++项目": {
+    "mode": "whitelist",
+    "extensions": [
+      ".cpp", ".cc", ".cxx", ".c",
+      ".h", ".hpp", ".hxx",
+      ".cmake", ".txt",
+      ".md", ".json"
+    ]
+  },
+  "Python项目": {
+    "mode": "whitelist",
+    "extensions": [
+      ".py", ".pyw", ".pyx",
+      ".ipynb", ".txt", ".md",
+      ".json", ".yaml", ".yml",
+      ".toml", ".cfg", ".ini"
+    ]
+  },
+  "Web前端": {
+    "mode": "whitelist",
+    "extensions": [
+      ".html", ".htm", ".css",
+      ".scss", ".sass", ".less",
+      ".js", ".jsx", ".ts", ".tsx",
+      ".vue", ".json", ".md"
+    ]
+  },
+  "排除临时文件": {
+    "mode": "blacklist",
+    "extensions": [
+      ".tmp", ".temp", ".bak",
+      ".swp", ".cache", ".log",
+      ".exe", ".dll", ".so",
+      ".pyc", ".pyo", ".class"
+    ]
+  },
+  "排除编译产物": {
+    "mode": "blacklist",
+    "extensions": [
+      ".o", ".obj", ".exe",
+      ".dll", ".so", ".dylib",
+      ".lib", ".a", ".pdb",
+      ".pyc", ".class"
+    ]
+  }
+}

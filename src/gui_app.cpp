@@ -11,6 +11,44 @@ namespace fs = std::filesystem;
 
 namespace CodeBackup { // 添加命名空间
 
+// UTF-8 到 UTF-16 转换辅助函数
+inline std::wstring Utf8ToWide(const std::string& utf8str) {
+    if (utf8str.empty()) return std::wstring();
+    
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8str.c_str(), -1, nullptr, 0);
+    if (wlen <= 0) {
+        // 转换失败，尝试使用简单转换
+        return std::wstring(utf8str.begin(), utf8str.end());
+    }
+    
+    std::wstring wstr(wlen, 0);
+    MultiByteToWideChar(CP_UTF8, 0, utf8str.c_str(), -1, &wstr[0], wlen);
+    // 移除末尾的 null 字符
+    if (!wstr.empty() && wstr.back() == 0) {
+        wstr.pop_back();
+    }
+    return wstr;
+}
+
+// UTF-16 到 UTF-8 转换辅助函数
+inline std::string WideToUtf8(const std::wstring& wstr) {
+    if (wstr.empty()) return std::string();
+    
+    int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) {
+        // 转换失败，尝试使用简单转换
+        return std::string(wstr.begin(), wstr.end());
+    }
+    
+    std::string str(len, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], len, nullptr, nullptr);
+    // 移除末尾的 null 字符
+    if (!str.empty() && str.back() == 0) {
+        str.pop_back();
+    }
+    return str;
+}
+
 // 设置对话框数据结构
 struct SettingsDialogData {
     GuiApp* app;
@@ -108,7 +146,7 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                         SendMessageW(data->hListPresets, LB_GETTEXT, sel, (LPARAM)preset);
                         
                         std::wstring presetStr(preset);
-                        std::string presetName(presetStr.begin(), presetStr.end());
+                        std::string presetName = WideToUtf8(presetStr);
                         
                         // 检查是否已存在
                         bool exists = false;
@@ -159,7 +197,7 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     }
                     
                     std::wstring pathWstr(path);
-                    data->source->path = std::string(pathWstr.begin(), pathWstr.end());
+                    data->source->path = WideToUtf8(pathWstr);
                     data->source->enabled = (SendMessageW(GetDlgItem(hwnd, IDC_CHECK_ENABLED), BM_GETCHECK, 0, 0) == BST_CHECKED);
                     
                     // 获取模式
@@ -176,7 +214,7 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                             wchar_t ext[256];
                             SendMessageW(data->hListExtensions, LB_GETTEXT, i, (LPARAM)ext);
                             std::wstring extWstr(ext);
-                            data->source->custom_filter->extensions.push_back(std::string(extWstr.begin(), extWstr.end()));
+                            data->source->custom_filter->extensions.push_back(WideToUtf8(extWstr));
                         }
                     }
                     
@@ -245,7 +283,7 @@ LRESULT CALLBACK SettingsDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
                         if (!exists) {
                             data->tempConfig.backup_sources.push_back(new_source);
                             
-                            std::wstring pathWstr(new_source.path.begin(), new_source.path.end());
+                            std::wstring pathWstr = Utf8ToWide(new_source.path);
                             std::wstring display = (new_source.enabled ? L"✓ " : L"✗ ") + pathWstr;
                             SendMessageW(data->hListSources, LB_ADDSTRING, 0, (LPARAM)display.c_str());
                         } else {
@@ -261,7 +299,7 @@ LRESULT CALLBACK SettingsDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
                         if (data->app->showSourceConfigDialog(data->tempConfig.backup_sources[sel], false)) {
                             // 更新列表显示
                             auto& source = data->tempConfig.backup_sources[sel];
-                            std::wstring pathWstr(source.path.begin(), source.path.end());
+                            std::wstring pathWstr = Utf8ToWide(source.path);
                             std::wstring display = (source.enabled ? L"✓ " : L"✗ ") + pathWstr;
                             
                             SendMessageW(data->hListSources, LB_DELETESTRING, sel, 0);
@@ -313,7 +351,7 @@ LRESULT CALLBACK SettingsDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
                     }
 
                     std::wstring dest_wstr(dest_path);
-                    data->tempConfig.backup_destination_base = std::string(dest_wstr.begin(), dest_wstr.end());
+                    data->tempConfig.backup_destination_base = WideToUtf8(dest_wstr);
                     
                     data->app->applyConfig(data->tempConfig);
                     data->app->saveConfiguration();
@@ -510,7 +548,7 @@ void GuiApp::showStatusDialog() {
     
     for (const auto& source : config_.backup_sources) {
         if (source.enabled) {
-            std::wstring path(source.path.begin(), source.path.end());
+            std::wstring path = Utf8ToWide(source.path);
             ss << L"  • " << path << L"\n";
         }
     }
@@ -582,7 +620,7 @@ void GuiApp::showFormatsWindow() {
     // 填充数据
     if (presets_.is_object()) {
         for (auto it = presets_.begin(); it != presets_.end(); ++it) {
-            std::wstring preset_name(it.key().begin(), it.key().end());
+            std::wstring preset_name = Utf8ToWide(it.key());
             std::wstring header = L"【" + preset_name + L"】";
             SendMessageW(hList, LB_ADDSTRING, 0, (LPARAM)header.c_str());
 
@@ -607,7 +645,7 @@ void GuiApp::showFormatsWindow() {
                 for (const auto& ext : extensions) {
                     if (count > 0) exts += L", ";
                     std::string ext_str = ext.get<std::string>();
-                    exts += std::wstring(ext_str.begin(), ext_str.end());
+                    exts += Utf8ToWide(ext_str);
                     count++;
 
                     if (count % 10 == 0 && count < (int)extensions.size()) {
@@ -631,7 +669,7 @@ void GuiApp::showFormatsWindow() {
     for (const auto& source : config_.backup_sources) {
         if (!source.enabled) continue;
 
-        std::wstring path(source.path.begin(), source.path.end());
+        std::wstring path = Utf8ToWide(source.path);
         std::wstring line = L"路径: " + path;
         SendMessageW(hList, LB_ADDSTRING, 0, (LPARAM)line.c_str());
 
@@ -639,7 +677,7 @@ void GuiApp::showFormatsWindow() {
             std::wstring presets_line = L"  应用预设: ";
             for (size_t i = 0; i < source.presets.size(); ++i) {
                 if (i > 0) presets_line += L", ";
-                std::wstring preset(source.presets[i].begin(), source.presets[i].end());
+                std::wstring preset = Utf8ToWide(source.presets[i]);
                 presets_line += preset;
             }
             SendMessageW(hList, LB_ADDSTRING, 0, (LPARAM)presets_line.c_str());
@@ -798,7 +836,7 @@ void GuiApp::showSettingsDialog() {
 
     // 填充备份源列表
     for (const auto& source : config_.backup_sources) {
-        std::wstring path(source.path.begin(), source.path.end());
+        std::wstring path = Utf8ToWide(source.path);
         std::wstring display = (source.enabled ? L"✓ " : L"✗ ") + path;
         SendMessageW(hListSources, LB_ADDSTRING, 0, (LPARAM)display.c_str());
     }
@@ -929,7 +967,7 @@ void GuiApp::saveConfiguration() {
         MessageBoxW(hwnd_, L"配置已保存", L"成功", MB_ICONINFORMATION);
     } catch (const std::exception& e) {
         std::string error = "保存配置失败: " + std::string(e.what());
-        std::wstring werror(error.begin(), error.end());
+        std::wstring werror = Utf8ToWide(error);
         MessageBoxW(hwnd_, werror.c_str(), L"错误", MB_ICONERROR);
     }
 }
@@ -1079,7 +1117,7 @@ bool GuiApp::loadConfiguration() {
         return true;
     } catch (const std::exception& e) {
         std::string error = "加载配置时出错: " + std::string(e.what());
-        std::wstring werror(error.begin(), error.end());
+        std::wstring werror = Utf8ToWide(error);
         MessageBoxW(hwnd_, werror.c_str(), L"配置错误", MB_ICONERROR);
         return false;
     }
@@ -1158,14 +1196,14 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
     dialogData->hFont = hFont;
 
     // 路径/文件选择区域
-    CreateWindowW(L"STATIC", L"路径或文件:", WS_CHILD | WS_VISIBLE,
+    CreateWindowW(L"STATIC", L"需要备份的路径或文件:", WS_CHILD | WS_VISIBLE,
         20, 20, 120, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
 
     HWND hEditPath = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
         20, 50, 600, 30, hwndDlg, (HMENU)IDC_EDIT_SOURCE_PATH, GetModuleHandle(nullptr), nullptr);
     
-    std::wstring pathWstr(source.path.begin(), source.path.end());
+    std::wstring pathWstr = Utf8ToWide(source.path);
     SetWindowTextW(hEditPath, pathWstr.c_str());
 
     CreateWindowW(L"BUTTON", L"选择文件夹", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
@@ -1191,7 +1229,7 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
     // 填充预设列表
     if (presets_.is_object()) {
         for (auto it = presets_.begin(); it != presets_.end(); ++it) {
-            std::wstring presetName(it.key().begin(), it.key().end());
+            std::wstring presetName = Utf8ToWide(it.key());
             SendMessageW(hListPresets, LB_ADDSTRING, 0, (LPARAM)presetName.c_str());
         }
     }
@@ -1234,7 +1272,7 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
     // 填充扩展名
     if (source.custom_filter) {
         for (const auto& ext : source.custom_filter->extensions) {
-            std::wstring extWstr(ext.begin(), ext.end());
+            std::wstring extWstr = Utf8ToWide(ext);
             SendMessageW(hListExt, LB_ADDSTRING, 0, (LPARAM)extWstr.c_str());
         }
     }
