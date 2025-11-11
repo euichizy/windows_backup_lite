@@ -196,7 +196,7 @@ LRESULT CALLBACK FormatsDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             return 0;
             
         case WM_DESTROY:
-            PostQuitMessage(0);
+            // 对话框不应该调用PostQuitMessage，只需要销毁窗口
             return 0;
     }
     return DefWindowProcW(hwnd, uMsg, wParam, lParam);
@@ -215,6 +215,32 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             if (!data) break;
 
             switch (ctrlId) {
+                case IDC_CHECK_USE_DUAL_MODE: {
+                    if (notifyCode == 0) { // 按钮点击
+                        bool useDualMode = (SendMessageW(GetDlgItem(hwnd, IDC_CHECK_USE_DUAL_MODE), BM_GETCHECK, 0, 0) == BST_CHECKED);
+                        
+                        // 更新控件可见性
+                        ShowWindow(GetDlgItem(hwnd, IDC_COMBO_MODE), useDualMode ? SW_HIDE : SW_SHOW);
+                        ShowWindow(GetDlgItem(hwnd, IDC_LIST_EXTENSIONS), useDualMode ? SW_HIDE : SW_SHOW);
+                        ShowWindow(GetDlgItem(hwnd, IDC_EDIT_EXTENSION), useDualMode ? SW_HIDE : SW_SHOW);
+                        ShowWindow(GetDlgItem(hwnd, IDC_BTN_ADD_EXT), useDualMode ? SW_HIDE : SW_SHOW);
+                        ShowWindow(GetDlgItem(hwnd, IDC_BTN_REMOVE_EXT), useDualMode ? SW_HIDE : SW_SHOW);
+                        
+                        ShowWindow(GetDlgItem(hwnd, IDC_STATIC_WHITELIST), useDualMode ? SW_SHOW : SW_HIDE);
+                        ShowWindow(GetDlgItem(hwnd, IDC_LIST_WHITELIST), useDualMode ? SW_SHOW : SW_HIDE);
+                        ShowWindow(GetDlgItem(hwnd, IDC_EDIT_WHITELIST_EXT), useDualMode ? SW_SHOW : SW_HIDE);
+                        ShowWindow(GetDlgItem(hwnd, IDC_BTN_ADD_WHITELIST), useDualMode ? SW_SHOW : SW_HIDE);
+                        ShowWindow(GetDlgItem(hwnd, IDC_BTN_REMOVE_WHITELIST), useDualMode ? SW_SHOW : SW_HIDE);
+                        
+                        ShowWindow(GetDlgItem(hwnd, IDC_STATIC_BLACKLIST), useDualMode ? SW_SHOW : SW_HIDE);
+                        ShowWindow(GetDlgItem(hwnd, IDC_LIST_BLACKLIST), useDualMode ? SW_SHOW : SW_HIDE);
+                        ShowWindow(GetDlgItem(hwnd, IDC_EDIT_BLACKLIST_EXT), useDualMode ? SW_SHOW : SW_HIDE);
+                        ShowWindow(GetDlgItem(hwnd, IDC_BTN_ADD_BLACKLIST), useDualMode ? SW_SHOW : SW_HIDE);
+                        ShowWindow(GetDlgItem(hwnd, IDC_BTN_REMOVE_BLACKLIST), useDualMode ? SW_SHOW : SW_HIDE);
+                    }
+                    return 0;
+                }
+
                 case IDC_BTN_BROWSE_SOURCE: {
                     std::wstring folder = data->app->browseForFolder(hwnd, L"选择要备份的文件夹");
                     if (!folder.empty()) {
@@ -435,7 +461,7 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                     }
 
                     HWND hwndPreview = CreateWindowExW(
-                        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+                        WS_EX_DLGMODALFRAME,
                         previewClassName,
                         L"预览效果",
                         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
@@ -671,7 +697,7 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
             return 0;
             
         case WM_DESTROY:
-            PostQuitMessage(0);
+            // 对话框不应该调用PostQuitMessage，只需要销毁窗口
             return 0;
     }
     return DefWindowProcW(hwnd, uMsg, wParam, lParam);
@@ -809,7 +835,7 @@ LRESULT CALLBACK SettingsDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
             return 0;
             
         case WM_DESTROY:
-            PostQuitMessage(0);
+            // 对话框不应该调用PostQuitMessage，只需要销毁窗口
             return 0;
     }
     return DefWindowProcW(hwnd, uMsg, wParam, lParam);
@@ -1013,7 +1039,7 @@ void GuiApp::showFormatsWindow() {
 
     // 创建对话框窗口
     HWND hwndDlg = CreateWindowExW(
-        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        WS_EX_DLGMODALFRAME,
         className,
         L"备份文件格式",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
@@ -1186,7 +1212,7 @@ void GuiApp::showPreviewDialog() {
 
     // 创建对话框窗口
     HWND hwndDlg = CreateWindowExW(
-        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        WS_EX_DLGMODALFRAME,
         className,
         L"备份文件预览",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
@@ -1383,7 +1409,7 @@ void GuiApp::showSettingsDialog() {
     
     // 创建对话框窗口
     HWND hwndDlg = CreateWindowExW(
-        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        WS_EX_DLGMODALFRAME,
         className,
         L"备份设置",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
@@ -1833,11 +1859,11 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
 
     // 创建对话框窗口
     HWND hwndDlg = CreateWindowExW(
-        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        WS_EX_DLGMODALFRAME,
         className,
         isNew ? L"添加备份源" : L"编辑备份源",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+        CW_USEDEFAULT, CW_USEDEFAULT, 800, 650,
         hwnd_,
         nullptr,
         GetModuleHandle(nullptr),
@@ -1914,19 +1940,30 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
     CreateWindowW(L"STATIC", L"自定义文件类型过滤 (会覆盖预设):", WS_CHILD | WS_VISIBLE,
         290, 130, 300, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
 
+    // 双列表模式复选框
+    HWND hCheckUseDualMode = CreateWindowW(L"BUTTON", L"使用双列表模式 (同时配置白名单和黑名单)", 
+        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+        290, 160, 400, 25, hwndDlg, (HMENU)IDC_CHECK_USE_DUAL_MODE, GetModuleHandle(nullptr), nullptr);
+    dialogData->hCheckUseDualMode = hCheckUseDualMode;
+    
+    // 检查是否应该启用双列表模式
+    bool useDualMode = source.custom_filter && source.custom_filter->useDualMode();
+    SendMessageW(hCheckUseDualMode, BM_SETCHECK, useDualMode ? BST_CHECKED : BST_UNCHECKED, 0);
+
+    // 单模式控件（模式选择）
     CreateWindowW(L"STATIC", L"模式:", WS_CHILD | WS_VISIBLE,
-        290, 160, 60, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
+        290, 195, 60, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
 
     HWND hComboMode = CreateWindowW(L"COMBOBOX", nullptr,
         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-        350, 160, 200, 200, hwndDlg, (HMENU)IDC_COMBO_MODE, GetModuleHandle(nullptr), nullptr);
+        350, 195, 200, 200, hwndDlg, (HMENU)IDC_COMBO_MODE, GetModuleHandle(nullptr), nullptr);
     dialogData->hComboMode = hComboMode;
     
     SendMessageW(hComboMode, CB_ADDSTRING, 0, (LPARAM)L"白名单 (仅备份)");
     SendMessageW(hComboMode, CB_ADDSTRING, 0, (LPARAM)L"黑名单 (排除)");
     SendMessageW(hComboMode, CB_ADDSTRING, 0, (LPARAM)L"无 (全部)");
     
-    if (source.custom_filter) {
+    if (source.custom_filter && !useDualMode) {
         if (source.custom_filter->mode == FilterConfig::Mode::Whitelist) SendMessageW(hComboMode, CB_SETCURSEL, 0, 0);
         else if (source.custom_filter->mode == FilterConfig::Mode::Blacklist) SendMessageW(hComboMode, CB_SETCURSEL, 1, 0);
         else SendMessageW(hComboMode, CB_SETCURSEL, 2, 0);
@@ -1935,15 +1972,15 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
     }
 
     CreateWindowW(L"STATIC", L"文件扩展名 (如: txt 或 .txt):", WS_CHILD | WS_VISIBLE,
-        290, 200, 250, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
+        290, 235, 250, 25, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
 
     HWND hListExt = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", nullptr,
         WS_CHILD | WS_VISIBLE | WS_VSCROLL,
-        290, 230, 260, 130, hwndDlg, (HMENU)IDC_LIST_EXTENSIONS, GetModuleHandle(nullptr), nullptr);
+        290, 265, 200, 95, hwndDlg, (HMENU)IDC_LIST_EXTENSIONS, GetModuleHandle(nullptr), nullptr);
     dialogData->hListExtensions = hListExt;
 
-    // 填充扩展名
-    if (source.custom_filter) {
+    // 填充扩展名（单模式）
+    if (source.custom_filter && !useDualMode) {
         for (const auto& ext : source.custom_filter->extensions) {
             std::wstring extWstr = Utf8ToWide(ext);
             SendMessageW(hListExt, LB_ADDSTRING, 0, (LPARAM)extWstr.c_str());
@@ -1952,35 +1989,116 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
 
     CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
-        560, 230, 100, 25, hwndDlg, (HMENU)IDC_EDIT_EXTENSION, GetModuleHandle(nullptr), nullptr);
+        500, 265, 90, 25, hwndDlg, (HMENU)IDC_EDIT_EXTENSION, GetModuleHandle(nullptr), nullptr);
 
     CreateWindowW(L"BUTTON", L"添加", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        670, 230, 60, 25, hwndDlg, (HMENU)IDC_BTN_ADD_EXT, GetModuleHandle(nullptr), nullptr);
+        600, 265, 60, 25, hwndDlg, (HMENU)IDC_BTN_ADD_EXT, GetModuleHandle(nullptr), nullptr);
 
     CreateWindowW(L"BUTTON", L"删除", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         670, 265, 60, 25, hwndDlg, (HMENU)IDC_BTN_REMOVE_EXT, GetModuleHandle(nullptr), nullptr);
+
+    // 双列表模式控件
+    // 白名单
+    CreateWindowW(L"STATIC", L"白名单 (仅备份这些类型):", WS_CHILD | WS_VISIBLE,
+        290, 195, 200, 25, hwndDlg, (HMENU)IDC_STATIC_WHITELIST, GetModuleHandle(nullptr), nullptr);
+
+    HWND hListWhitelist = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL,
+        290, 225, 200, 95, hwndDlg, (HMENU)IDC_LIST_WHITELIST, GetModuleHandle(nullptr), nullptr);
+    dialogData->hListWhitelist = hListWhitelist;
+
+    // 填充白名单
+    if (source.custom_filter && useDualMode) {
+        for (const auto& ext : source.custom_filter->whitelist_extensions) {
+            std::wstring extWstr = Utf8ToWide(ext);
+            SendMessageW(hListWhitelist, LB_ADDSTRING, 0, (LPARAM)extWstr.c_str());
+        }
+    }
+
+    CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+        500, 225, 90, 25, hwndDlg, (HMENU)IDC_EDIT_WHITELIST_EXT, GetModuleHandle(nullptr), nullptr);
+
+    CreateWindowW(L"BUTTON", L"添加", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        600, 225, 60, 25, hwndDlg, (HMENU)IDC_BTN_ADD_WHITELIST, GetModuleHandle(nullptr), nullptr);
+
+    CreateWindowW(L"BUTTON", L"删除", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        670, 225, 60, 25, hwndDlg, (HMENU)IDC_BTN_REMOVE_WHITELIST, GetModuleHandle(nullptr), nullptr);
+
+    // 黑名单
+    CreateWindowW(L"STATIC", L"黑名单 (排除这些类型):", WS_CHILD | WS_VISIBLE,
+        290, 330, 200, 25, hwndDlg, (HMENU)IDC_STATIC_BLACKLIST, GetModuleHandle(nullptr), nullptr);
+
+    HWND hListBlacklist = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL,
+        290, 360, 200, 95, hwndDlg, (HMENU)IDC_LIST_BLACKLIST, GetModuleHandle(nullptr), nullptr);
+    dialogData->hListBlacklist = hListBlacklist;
+
+    // 填充黑名单
+    if (source.custom_filter && useDualMode) {
+        for (const auto& ext : source.custom_filter->blacklist_extensions) {
+            std::wstring extWstr = Utf8ToWide(ext);
+            SendMessageW(hListBlacklist, LB_ADDSTRING, 0, (LPARAM)extWstr.c_str());
+        }
+    }
+
+    CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+        500, 360, 90, 25, hwndDlg, (HMENU)IDC_EDIT_BLACKLIST_EXT, GetModuleHandle(nullptr), nullptr);
+
+    CreateWindowW(L"BUTTON", L"添加", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        600, 360, 60, 25, hwndDlg, (HMENU)IDC_BTN_ADD_BLACKLIST, GetModuleHandle(nullptr), nullptr);
+
+    CreateWindowW(L"BUTTON", L"删除", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        670, 360, 60, 25, hwndDlg, (HMENU)IDC_BTN_REMOVE_BLACKLIST, GetModuleHandle(nullptr), nullptr);
+
+    // 根据模式显示/隐藏控件
+    auto updateControlVisibility = [](HWND hwnd, bool useDualMode) {
+        // 单模式控件
+        ShowWindow(GetDlgItem(hwnd, IDC_COMBO_MODE), useDualMode ? SW_HIDE : SW_SHOW);
+        ShowWindow(GetDlgItem(hwnd, IDC_LIST_EXTENSIONS), useDualMode ? SW_HIDE : SW_SHOW);
+        ShowWindow(GetDlgItem(hwnd, IDC_EDIT_EXTENSION), useDualMode ? SW_HIDE : SW_SHOW);
+        ShowWindow(GetDlgItem(hwnd, IDC_BTN_ADD_EXT), useDualMode ? SW_HIDE : SW_SHOW);
+        ShowWindow(GetDlgItem(hwnd, IDC_BTN_REMOVE_EXT), useDualMode ? SW_HIDE : SW_SHOW);
+        
+        // 双列表模式控件
+        ShowWindow(GetDlgItem(hwnd, IDC_STATIC_WHITELIST), useDualMode ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(hwnd, IDC_LIST_WHITELIST), useDualMode ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(hwnd, IDC_EDIT_WHITELIST_EXT), useDualMode ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(hwnd, IDC_BTN_ADD_WHITELIST), useDualMode ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(hwnd, IDC_BTN_REMOVE_WHITELIST), useDualMode ? SW_SHOW : SW_HIDE);
+        
+        ShowWindow(GetDlgItem(hwnd, IDC_STATIC_BLACKLIST), useDualMode ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(hwnd, IDC_LIST_BLACKLIST), useDualMode ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(hwnd, IDC_EDIT_BLACKLIST_EXT), useDualMode ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(hwnd, IDC_BTN_ADD_BLACKLIST), useDualMode ? SW_SHOW : SW_HIDE);
+        ShowWindow(GetDlgItem(hwnd, IDC_BTN_REMOVE_BLACKLIST), useDualMode ? SW_SHOW : SW_HIDE);
+    };
+    
+    updateControlVisibility(hwndDlg, useDualMode);
 
     // 添加说明文本
     CreateWindowW(L"STATIC", 
         L"💡 提示：\n"
         L"• 预设：快速应用预定义的过滤规则\n"
         L"• 自定义过滤器：精确控制要备份的文件类型\n"
-        L"• 白名单：只备份列表中的文件类型\n"
-        L"• 黑名单：排除列表中的文件类型，备份其他所有文件\n"
+        L"• 单模式 - 白名单：只备份列表中的文件类型\n"
+        L"• 单模式 - 黑名单：排除列表中的文件类型，备份其他所有文件\n"
+        L"• 双列表模式：同时配置白名单和黑名单，必须在白名单中且不在黑名单中才会备份\n"
         L"• 如果同时设置预设和自定义过滤器，自定义过滤器优先",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
-        20, 410, 760, 90, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
+        20, 465, 760, 100, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
 
     // 预览按钮
     CreateWindowW(L"BUTTON", L"预览效果", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        20, 520, 120, 35, hwndDlg, (HMENU)IDC_BTN_PREVIEW, GetModuleHandle(nullptr), nullptr);
+        20, 575, 120, 35, hwndDlg, (HMENU)IDC_BTN_PREVIEW, GetModuleHandle(nullptr), nullptr);
 
     // 确定/取消按钮
     CreateWindowW(L"BUTTON", L"确定", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-        580, 520, 100, 35, hwndDlg, (HMENU)IDC_BTN_SOURCE_OK, GetModuleHandle(nullptr), nullptr);
+        580, 575, 100, 35, hwndDlg, (HMENU)IDC_BTN_SOURCE_OK, GetModuleHandle(nullptr), nullptr);
 
     CreateWindowW(L"BUTTON", L"取消", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        690, 520, 100, 35, hwndDlg, (HMENU)IDC_BTN_SOURCE_CANCEL, GetModuleHandle(nullptr), nullptr);
+        690, 575, 100, 35, hwndDlg, (HMENU)IDC_BTN_SOURCE_CANCEL, GetModuleHandle(nullptr), nullptr);
 
     // 设置字体
     EnumChildWindows(hwndDlg, [](HWND hwnd, LPARAM lParam) -> BOOL {
