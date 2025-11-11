@@ -1,15 +1,114 @@
 #include "gui_app.h"
 #include "logger.h" // 假设这些头文件存在
+#include "config_loader.h"
 #include <shellapi.h>
 #include <commctrl.h>
 #include <shlobj.h>
 #include <filesystem>
 #include <sstream>
 #include <fstream>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
 namespace CodeBackup { // 添加命名空间
+
+// 辅助函数：检查文件是否被过滤器允许
+static bool isFileAllowed(const std::string& file_path, const FilterConfig& filter) {
+    // 获取文件扩展名
+    size_t dot_pos = file_path.find_last_of('.');
+    if (dot_pos == std::string::npos) {
+        // 没有扩展名的文件
+        if (filter.useDualMode()) {
+            // 双列表模式：如果有白名单，没有扩展名的文件不通过
+            return filter.whitelist_extensions.empty();
+        } else if (filter.mode == FilterConfig::Mode::Whitelist) {
+            return false; // 白名单模式下，没有扩展名的文件不通过
+        }
+        return true; // 黑名单或无模式下，没有扩展名的文件通过
+    }
+    
+    std::string ext = file_path.substr(dot_pos);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    
+    if (filter.useDualMode()) {
+        // 新的双列表模式
+        bool in_whitelist = filter.whitelist_extensions.empty();
+        bool in_blacklist = false;
+        
+        for (const auto& allowed_ext : filter.whitelist_extensions) {
+            std::string lower_ext = allowed_ext;
+            std::transform(lower_ext.begin(), lower_ext.end(), lower_ext.begin(), ::tolower);
+            if (ext == lower_ext) {
+                in_whitelist = true;
+                break;
+            }
+        }
+        
+        for (const auto& blocked_ext : filter.blacklist_extensions) {
+            std::string lower_ext = blocked_ext;
+            std::transform(lower_ext.begin(), lower_ext.end(), lower_ext.begin(), ::tolower);
+            if (ext == lower_ext) {
+                in_blacklist = true;
+                break;
+            }
+        }
+        
+        // 白名单优先：必须在白名单中且不在黑名单中
+        return in_whitelist && !in_blacklist;
+    } else {
+        // 旧的单模式
+        if (filter.mode == FilterConfig::Mode::None) {
+            return true;
+        }
+        
+        bool found = false;
+        for (const auto& allowed_ext : filter.extensions) {
+            std::string lower_ext = allowed_ext;
+            std::transform(lower_ext.begin(), lower_ext.end(), lower_ext.begin(), ::tolower);
+            if (ext == lower_ext) {
+                found = true;
+                break;
+            }
+        }
+        
+        if (filter.mode == FilterConfig::Mode::Whitelist) {
+            return found;
+        } else { // Blacklist
+            return !found;
+        }
+    }
+}
+
+// 辅助函数：递归扫描目录并分类文件
+static void scanDirectory(const std::string& path, const FilterConfig& filter, 
+                          std::vector<std::string>& included, std::vector<std::string>& excluded,
+                          int max_files = 1000) {
+    if (included.size() + excluded.size() >= (size_t)max_files) {
+        return; // 限制扫描文件数量
+    }
+    
+    try {
+        for (const auto& entry : fs::recursive_directory_iterator(path, 
+            fs::directory_options::skip_permission_denied)) {
+            
+            if (included.size() + excluded.size() >= (size_t)max_files) {
+                break;
+            }
+            
+            if (entry.is_regular_file()) {
+                std::string file_path = entry.path().string();
+                if (isFileAllowed(file_path, filter)) {
+                    included.push_back(file_path);
+                } else {
+                    excluded.push_back(file_path);
+                }
+            }
+        }
+    } catch (const std::exception&) {
+        // 忽略访问错误
+    }
+}
 
 // UTF-8 到 UTF-16 转换辅助函数
 inline std::wstring Utf8ToWide(const std::string& utf8str) {
@@ -243,6 +342,244 @@ LRESULT CALLBACK SourceConfigDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
                             SendMessageW(data->hListBlacklist, LB_DELETESTRING, sel, 0);
                         }
                     }
+                    return 0;
+                }
+
+                case IDC_BTN_PREVIEW: {
+                    // 预览当前配置的效果
+                    wchar_t path[MAX_PATH];
+                    GetWindowTextW(GetDlgItem(hwnd, IDC_EDIT_SOURCE_PATH), path, MAX_PATH);
+                    
+                    if (wcslen(path) == 0) {
+                        MessageBoxW(hwnd, L"请先选择路径或文件", L"提示", MB_ICONWARNING);
+                        return 0;
+                    }
+                    
+                    std::wstring pathWstr(path);
+                    std::string pathStr = WideToUtf8(pathWstr);
+                    
+                    if (!fs::exists(pathStr)) {
+                        MessageBoxW(hwnd, L"路径不存在", L"错误", MB_ICONERROR);
+                        return 0;
+                    }
+                    
+                    // 构建临时过滤器配置
+                    FilterConfig temp_filter;
+                    
+                    // 检查是否使用双列表模式
+                    bool useDualMode = (data->hCheckUseDualMode && 
+                                       SendMessageW(data->hCheckUseDualMode, BM_GETCHECK, 0, 0) == BST_CHECKED);
+                    
+                    if (useDualMode && data->hListWhitelist && data->hListBlacklist) {
+                        // 获取白名单
+                        int whiteCount = (int)SendMessageW(data->hListWhitelist, LB_GETCOUNT, 0, 0);
+                        for (int i = 0; i < whiteCount; i++) {
+                            wchar_t ext[256];
+                            SendMessageW(data->hListWhitelist, LB_GETTEXT, i, (LPARAM)ext);
+                            temp_filter.whitelist_extensions.push_back(WideToUtf8(std::wstring(ext)));
+                        }
+                        
+                        // 获取黑名单
+                        int blackCount = (int)SendMessageW(data->hListBlacklist, LB_GETCOUNT, 0, 0);
+                        for (int i = 0; i < blackCount; i++) {
+                            wchar_t ext[256];
+                            SendMessageW(data->hListBlacklist, LB_GETTEXT, i, (LPARAM)ext);
+                            temp_filter.blacklist_extensions.push_back(WideToUtf8(std::wstring(ext)));
+                        }
+                    } else {
+                        // 使用单模式
+                        int modeIdx = (int)SendMessageW(data->hComboMode, CB_GETCURSEL, 0, 0);
+                        if (modeIdx == 0) temp_filter.mode = FilterConfig::Mode::Whitelist;
+                        else if (modeIdx == 1) temp_filter.mode = FilterConfig::Mode::Blacklist;
+                        else temp_filter.mode = FilterConfig::Mode::None;
+                        
+                        // 获取扩展名列表
+                        int count = (int)SendMessageW(data->hListExtensions, LB_GETCOUNT, 0, 0);
+                        for (int i = 0; i < count; i++) {
+                            wchar_t ext[256];
+                            SendMessageW(data->hListExtensions, LB_GETTEXT, i, (LPARAM)ext);
+                            temp_filter.extensions.push_back(WideToUtf8(std::wstring(ext)));
+                        }
+                    }
+                    
+                    // 合并预设
+                    FilterConfig merged_filter = ConfigLoader::mergeFilters(
+                        data->source->presets,
+                        *data->presets,
+                        temp_filter
+                    );
+                    
+                    // 扫描文件
+                    std::vector<std::string> included, excluded;
+                    if (fs::is_regular_file(pathStr)) {
+                        if (isFileAllowed(pathStr, merged_filter)) {
+                            included.push_back(pathStr);
+                        } else {
+                            excluded.push_back(pathStr);
+                        }
+                    } else if (fs::is_directory(pathStr)) {
+                        scanDirectory(pathStr, merged_filter, included, excluded, 500);
+                    }
+                    
+                    // 创建预览窗口
+                    static const wchar_t* previewClassName = L"SourcePreviewDialogClass";
+                    static bool previewRegistered = false;
+                    if (!previewRegistered) {
+                        WNDCLASSW wc = {};
+                        wc.lpfnWndProc = FormatsDialogProc;
+                        wc.hInstance = GetModuleHandle(nullptr);
+                        wc.lpszClassName = previewClassName;
+                        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+                        RegisterClassW(&wc);
+                        previewRegistered = true;
+                    }
+
+                    HWND hwndPreview = CreateWindowExW(
+                        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+                        previewClassName,
+                        L"预览效果",
+                        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+                        CW_USEDEFAULT, CW_USEDEFAULT, 900, 650,
+                        hwnd,
+                        nullptr,
+                        GetModuleHandle(nullptr),
+                        nullptr
+                    );
+
+                    if (!hwndPreview) {
+                        MessageBoxW(hwnd, L"无法创建预览窗口", L"错误", MB_ICONERROR);
+                        return 0;
+                    }
+
+                    // 居中窗口
+                    RECT rect;
+                    GetWindowRect(hwndPreview, &rect);
+                    int x = (GetSystemMetrics(SM_CXSCREEN) - (rect.right - rect.left)) / 2;
+                    int y = (GetSystemMetrics(SM_CYSCREEN) - (rect.bottom - rect.top)) / 2;
+                    SetWindowPos(hwndPreview, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+
+                    // 创建字体
+                    HFONT hPreviewFont = CreateFontW(
+                        16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+                        L"Segoe UI"
+                    );
+
+                    // 说明文本
+                    CreateWindowW(
+                        L"STATIC",
+                        L"预览结果（最多显示500个文件）：",
+                        WS_CHILD | WS_VISIBLE,
+                        20, 20, 850, 25,
+                        hwndPreview, nullptr, GetModuleHandle(nullptr), nullptr
+                    );
+
+                    // 会备份的文件列表
+                    std::wstring includedLabel = L"✓ 会备份的文件 (" + std::to_wstring(included.size()) + L")：";
+                    CreateWindowW(
+                        L"STATIC", includedLabel.c_str(),
+                        WS_CHILD | WS_VISIBLE,
+                        20, 55, 400, 25,
+                        hwndPreview, (HMENU)IDC_STATIC_SOURCE_INCLUDED_COUNT, GetModuleHandle(nullptr), nullptr
+                    );
+
+                    HWND hListIncluded = CreateWindowExW(
+                        WS_EX_CLIENTEDGE,
+                        L"LISTBOX",
+                        nullptr,
+                        WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | LBS_NOINTEGRALHEIGHT,
+                        20, 85, 420, 480,
+                        hwndPreview,
+                        (HMENU)IDC_LIST_SOURCE_PREVIEW_INCLUDED,
+                        GetModuleHandle(nullptr),
+                        nullptr
+                    );
+
+                    // 不会备份的文件列表
+                    std::wstring excludedLabel = L"✗ 不会备份的文件 (" + std::to_wstring(excluded.size()) + L")：";
+                    CreateWindowW(
+                        L"STATIC", excludedLabel.c_str(),
+                        WS_CHILD | WS_VISIBLE,
+                        460, 55, 400, 25,
+                        hwndPreview, (HMENU)IDC_STATIC_SOURCE_EXCLUDED_COUNT, GetModuleHandle(nullptr), nullptr
+                    );
+
+                    HWND hListExcluded = CreateWindowExW(
+                        WS_EX_CLIENTEDGE,
+                        L"LISTBOX",
+                        nullptr,
+                        WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | LBS_NOINTEGRALHEIGHT,
+                        460, 85, 420, 480,
+                        hwndPreview,
+                        (HMENU)IDC_LIST_SOURCE_PREVIEW_EXCLUDED,
+                        GetModuleHandle(nullptr),
+                        nullptr
+                    );
+
+                    // 设置字体
+                    SendMessageW(hListIncluded, WM_SETFONT, (WPARAM)hPreviewFont, TRUE);
+                    SendMessageW(hListExcluded, WM_SETFONT, (WPARAM)hPreviewFont, TRUE);
+
+                    // 填充列表
+                    for (const auto& file : included) {
+                        std::wstring wfile = Utf8ToWide(file);
+                        SendMessageW(hListIncluded, LB_ADDSTRING, 0, (LPARAM)wfile.c_str());
+                    }
+
+                    for (const auto& file : excluded) {
+                        std::wstring wfile = Utf8ToWide(file);
+                        SendMessageW(hListExcluded, LB_ADDSTRING, 0, (LPARAM)wfile.c_str());
+                    }
+
+                    // 如果没有文件
+                    if (included.empty()) {
+                        SendMessageW(hListIncluded, LB_ADDSTRING, 0, (LPARAM)L"（没有符合条件的文件）");
+                    }
+                    if (excluded.empty()) {
+                        SendMessageW(hListExcluded, LB_ADDSTRING, 0, (LPARAM)L"（没有被排除的文件）");
+                    }
+
+                    // 创建关闭按钮
+                    HWND hBtnClose = CreateWindowW(
+                        L"BUTTON",
+                        L"关闭",
+                        WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                        400, 575, 100, 35,
+                        hwndPreview,
+                        (HMENU)IDC_BTN_SOURCE_PREVIEW_CLOSE,
+                        GetModuleHandle(nullptr),
+                        nullptr
+                    );
+
+                    // 给所有控件设置字体
+                    EnumChildWindows(hwndPreview, [](HWND hwnd, LPARAM lParam) -> BOOL {
+                        SendMessageW(hwnd, WM_SETFONT, (WPARAM)lParam, TRUE);
+                        return TRUE;
+                    }, (LPARAM)hPreviewFont);
+
+                    // 消息循环
+                    MSG msg;
+                    while (GetMessageW(&msg, nullptr, 0, 0)) {
+                        if (msg.message == WM_QUIT || !IsWindow(hwndPreview)) {
+                            break;
+                        }
+                        
+                        // 处理关闭按钮
+                        if (msg.message == WM_COMMAND && LOWORD(msg.wParam) == IDC_BTN_SOURCE_PREVIEW_CLOSE) {
+                            DestroyWindow(hwndPreview);
+                            break;
+                        }
+                        
+                        TranslateMessage(&msg);
+                        DispatchMessageW(&msg);
+                    }
+
+                    if (IsWindow(hwndPreview)) {
+                        DestroyWindow(hwndPreview);
+                    }
+                    DeleteObject(hPreviewFont);
+                    
                     return 0;
                 }
 
@@ -535,6 +872,9 @@ LRESULT CALLBACK GuiApp::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
                 case ID_TRAY_CONFIG:
                     app->showConfigDialog();
                     break;
+                case ID_TRAY_PREVIEW:
+                    app->showPreviewDialog();
+                    break;
                 case ID_TRAY_EXIT:
                     PostQuitMessage(0);
                     break;
@@ -623,6 +963,7 @@ void GuiApp::showContextMenu() {
         AppendMenuW(hMenu_, MF_STRING, ID_TRAY_STOP, L"停止监控");
         AppendMenuW(hMenu_, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(hMenu_, MF_STRING, ID_TRAY_STATUS, L"查看状态");
+        AppendMenuW(hMenu_, MF_STRING, ID_TRAY_PREVIEW, L"预览备份文件");
         AppendMenuW(hMenu_, MF_STRING, ID_TRAY_FORMATS, L"备份格式");
         AppendMenuW(hMenu_, MF_STRING, ID_TRAY_SETTINGS, L"备份设置");
         AppendMenuW(hMenu_, MF_STRING, ID_TRAY_CONFIG, L"编辑配置文件");
@@ -824,10 +1165,201 @@ void GuiApp::showFormatsWindow() {
 }
 
 
-
 void GuiApp::showConfigDialog() {
     // 尝试用记事本打开 config.json
     ShellExecuteW(nullptr, L"open", L"notepad.exe", L"config.json", nullptr, SW_SHOW);
+}
+
+void GuiApp::showPreviewDialog() {
+    // 注册对话框窗口类
+    static const wchar_t* className = L"PreviewDialogClass";
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSW wc = {};
+        wc.lpfnWndProc = FormatsDialogProc; // 复用简单的窗口过程
+        wc.hInstance = GetModuleHandle(nullptr);
+        wc.lpszClassName = className;
+        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+        RegisterClassW(&wc);
+        registered = true;
+    }
+
+    // 创建对话框窗口
+    HWND hwndDlg = CreateWindowExW(
+        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        className,
+        L"备份文件预览",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        CW_USEDEFAULT, CW_USEDEFAULT, 1000, 700,
+        hwnd_,
+        nullptr,
+        GetModuleHandle(nullptr),
+        nullptr
+    );
+
+    if (!hwndDlg) {
+        MessageBoxW(hwnd_, L"无法创建窗口", L"错误", MB_ICONERROR);
+        return;
+    }
+
+    // 居中窗口
+    RECT rect;
+    GetWindowRect(hwndDlg, &rect);
+    int x = (GetSystemMetrics(SM_CXSCREEN) - (rect.right - rect.left)) / 2;
+    int y = (GetSystemMetrics(SM_CYSCREEN) - (rect.bottom - rect.top)) / 2;
+    SetWindowPos(hwndDlg, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+
+    // 创建字体
+    HFONT hFont = CreateFontW(
+        16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+        L"Segoe UI"
+    );
+
+    // 说明文本
+    CreateWindowW(
+        L"STATIC",
+        L"以下是根据当前配置，各个备份源中会被备份和被排除的文件示例（最多显示1000个文件）：",
+        WS_CHILD | WS_VISIBLE,
+        20, 20, 950, 25,
+        hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr
+    );
+
+    // 会备份的文件列表
+    CreateWindowW(
+        L"STATIC", L"✓ 会备份的文件:",
+        WS_CHILD | WS_VISIBLE,
+        20, 55, 200, 25,
+        hwndDlg, (HMENU)IDC_STATIC_INCLUDED_COUNT, GetModuleHandle(nullptr), nullptr
+    );
+
+    HWND hListIncluded = CreateWindowExW(
+        WS_EX_CLIENTEDGE,
+        L"LISTBOX",
+        nullptr,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | LBS_NOINTEGRALHEIGHT,
+        20, 85, 460, 500,
+        hwndDlg,
+        (HMENU)IDC_LIST_PREVIEW_INCLUDED,
+        GetModuleHandle(nullptr),
+        nullptr
+    );
+
+    // 不会备份的文件列表
+    CreateWindowW(
+        L"STATIC", L"✗ 不会备份的文件:",
+        WS_CHILD | WS_VISIBLE,
+        510, 55, 200, 25,
+        hwndDlg, (HMENU)IDC_STATIC_EXCLUDED_COUNT, GetModuleHandle(nullptr), nullptr
+    );
+
+    HWND hListExcluded = CreateWindowExW(
+        WS_EX_CLIENTEDGE,
+        L"LISTBOX",
+        nullptr,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | LBS_NOINTEGRALHEIGHT,
+        510, 85, 460, 500,
+        hwndDlg,
+        (HMENU)IDC_LIST_PREVIEW_EXCLUDED,
+        GetModuleHandle(nullptr),
+        nullptr
+    );
+
+    // 设置字体
+    SendMessageW(hListIncluded, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(hListExcluded, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    // 扫描所有启用的备份源
+    std::vector<std::string> all_included;
+    std::vector<std::string> all_excluded;
+    
+    for (const auto& source : config_.backup_sources) {
+        if (!source.enabled || !fs::exists(source.path)) {
+            continue;
+        }
+
+        // 合并过滤器配置
+        FilterConfig filter = ConfigLoader::mergeFilters(
+            source.presets, 
+            presets_, 
+            source.custom_filter
+        );
+
+        // 如果是单个文件
+        if (fs::is_regular_file(source.path)) {
+            if (isFileAllowed(source.path, filter)) {
+                all_included.push_back(source.path);
+            } else {
+                all_excluded.push_back(source.path);
+            }
+        } else if (fs::is_directory(source.path)) {
+            // 扫描目录
+            scanDirectory(source.path, filter, all_included, all_excluded, 1000);
+        }
+    }
+
+    // 更新标签显示数量
+    std::wstring included_label = L"✓ 会备份的文件 (" + std::to_wstring(all_included.size()) + L")：";
+    std::wstring excluded_label = L"✗ 不会备份的文件 (" + std::to_wstring(all_excluded.size()) + L")：";
+    SetWindowTextW(GetDlgItem(hwndDlg, IDC_STATIC_INCLUDED_COUNT), included_label.c_str());
+    SetWindowTextW(GetDlgItem(hwndDlg, IDC_STATIC_EXCLUDED_COUNT), excluded_label.c_str());
+
+    // 填充列表
+    for (const auto& file : all_included) {
+        std::wstring wfile = Utf8ToWide(file);
+        SendMessageW(hListIncluded, LB_ADDSTRING, 0, (LPARAM)wfile.c_str());
+    }
+
+    for (const auto& file : all_excluded) {
+        std::wstring wfile = Utf8ToWide(file);
+        SendMessageW(hListExcluded, LB_ADDSTRING, 0, (LPARAM)wfile.c_str());
+    }
+
+    // 如果没有启用的备份源
+    if (all_included.empty() && all_excluded.empty()) {
+        SendMessageW(hListIncluded, LB_ADDSTRING, 0, (LPARAM)L"（没有启用的备份源或源路径不存在）");
+    }
+
+    // 创建关闭按钮
+    HWND hBtnClose = CreateWindowW(
+        L"BUTTON",
+        L"关闭",
+        WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+        450, 600, 100, 35,
+        hwndDlg,
+        (HMENU)IDOK,
+        GetModuleHandle(nullptr),
+        nullptr
+    );
+    SendMessageW(hBtnClose, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    // 给所有控件设置字体
+    EnumChildWindows(hwndDlg, [](HWND hwnd, LPARAM lParam) -> BOOL {
+        SendMessageW(hwnd, WM_SETFONT, (WPARAM)lParam, TRUE);
+        return TRUE;
+    }, (LPARAM)hFont);
+
+    SetWindowLongPtrW(hwndDlg, GWLP_USERDATA, (LONG_PTR)this);
+
+    // 消息循环
+    EnableWindow(hwnd_, FALSE);
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0)) {
+        if (msg.message == WM_QUIT || !IsWindow(hwndDlg)) {
+            break;
+        }
+        
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    EnableWindow(hwnd_, TRUE);
+    SetForegroundWindow(hwnd_);
+    if (IsWindow(hwndDlg)) {
+        DestroyWindow(hwndDlg);
+    }
+    DeleteObject(hFont);
 }
 
 void GuiApp::showSettingsDialog() {
@@ -1438,6 +1970,10 @@ bool GuiApp::showSourceConfigDialog(BackupSource& source, bool isNew) {
         L"• 如果同时设置预设和自定义过滤器，自定义过滤器优先",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         20, 410, 760, 90, hwndDlg, nullptr, GetModuleHandle(nullptr), nullptr);
+
+    // 预览按钮
+    CreateWindowW(L"BUTTON", L"预览效果", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        20, 520, 120, 35, hwndDlg, (HMENU)IDC_BTN_PREVIEW, GetModuleHandle(nullptr), nullptr);
 
     // 确定/取消按钮
     CreateWindowW(L"BUTTON", L"确定", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,

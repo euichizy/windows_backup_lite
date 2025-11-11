@@ -21,6 +21,7 @@
 #define ID_TRAY_FORMATS 1004
 #define ID_TRAY_CONFIG 1005
 #define ID_TRAY_SETTINGS 1006
+#define ID_TRAY_PREVIEW 1008
 #define ID_TRAY_EXIT 1007
 
 // 设置对话框控件ID
@@ -61,6 +62,21 @@
 #define IDC_BTN_REMOVE_WHITELIST 2040
 #define IDC_BTN_REMOVE_BLACKLIST 2041
 #define IDC_CHECK_USE_DUAL_MODE 2042
+#define IDC_BTN_PREVIEW 2043
+
+// 预览对话框控件ID
+#define IDC_LIST_PREVIEW_INCLUDED 2050
+#define IDC_LIST_PREVIEW_EXCLUDED 2051
+#define IDC_STATIC_INCLUDED_COUNT 2052
+#define IDC_STATIC_EXCLUDED_COUNT 2053
+#define IDC_BTN_PREVIEW_CLOSE 2054
+
+// 源配置预览对话框控件ID
+#define IDC_LIST_SOURCE_PREVIEW_INCLUDED 2060
+#define IDC_LIST_SOURCE_PREVIEW_EXCLUDED 2061
+#define IDC_STATIC_SOURCE_INCLUDED_COUNT 2062
+#define IDC_STATIC_SOURCE_EXCLUDED_COUNT 2063
+#define IDC_BTN_SOURCE_PREVIEW_CLOSE 2064
 
 namespace CodeBackup { // 添加命名空间
 
@@ -98,6 +114,7 @@ private:
     void showFormatsWindow();
     void showConfigDialog();
     void showSettingsDialog();
+    void showPreviewDialog();
     
     // 配置
     bool loadConfiguration();
