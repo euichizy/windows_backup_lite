@@ -967,9 +967,16 @@ void GuiApp::createTrayIcon() {
     nid_.uID = 1;
     nid_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid_.uCallbackMessage = WM_TRAYICON;
-    // 使用标准图标，或加载自定义图标
-    // nid_.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_YOUR_ICON));
-    nid_.hIcon = LoadIcon(nullptr, IDI_APPLICATION); // 暂用系统图标
+    
+    // 加载自定义图标
+    HICON hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(101));
+    if (hIcon) {
+        nid_.hIcon = hIcon;
+    } else {
+        // 如果加载失败，使用系统默认图标
+        nid_.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    }
+    
     wcscpy_s(nid_.szTip, L"CodeBackup - 已停止");
 
     Shell_NotifyIconW(NIM_ADD, &nid_);

@@ -1,0 +1,4 @@
+// 应用程序图标资源文件
+#include "resource.h"
+
+IDI_ICON1 ICON "favicon.ico"

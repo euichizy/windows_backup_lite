@@ -39,6 +39,7 @@ add_executable(codebackup_gui WIN32
     src/main_gui.cpp
     src/gui_app.cpp
     ${COMMON_SOURCES}
+    resources/app_icon.rc  # 添加图标资源
 )
 
 target_include_directories(codebackup_gui PRIVATE include)
